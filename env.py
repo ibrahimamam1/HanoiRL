@@ -107,9 +107,15 @@ class HanoiEnv(gym.Env):
         obs = self._get_obs()
         info = self._get_info()
         truncated = False
-        terminated = bool(np.sum(self.towers[2]) == self.n_disks)
-        if(terminated):
-            reward += 150
+        terminated = False 
+
+        if (bool(np.sum(self.towers[2]) == self.n_disks)):
+            terminated = True 
+            reward += 1000
+
+        if(self.moves >= 100):
+            terminated = True 
+            reward -= 50
         reward -= 0.1  # -1 for every time step
         
         if self.render_mode == "human":
