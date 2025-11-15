@@ -20,7 +20,9 @@ class HanoiEnv(gym.Env):
                 "tower 3": spaces.MultiBinary(self.n_disks),
             }
         )
-        self.towers = np.zeros((3, self.n_disks))
+        self.towers = np.zeros((3, self.n_disks), dtype=np.int8)
+        self.moves = 0
+        
         # our action is a pair(source,destination)
         # move top disk on source to destination 
         self.action_space = spaces.Discrete(6)
@@ -48,15 +50,20 @@ class HanoiEnv(gym.Env):
         self.min_disk_width = 30
         
     def _get_obs(self):
-        return {"tower 1": self.towers[0], "tower 2": self.towers[1], "tower 3": self.towers[2]} 
+        return {
+            "tower 1": self.towers[0].astype(np.int8),
+            "tower 2": self.towers[1].astype(np.int8),
+            "tower 3": self.towers[2].astype(np.int8)} 
     
     def _get_info(self):
         return {
-            "remaining": int(self.n_disks - np.sum(self.towers[2]))
+            "remaining": int(self.n_disks - np.sum(self.towers[2])),
+            "moves": self.moves
         }
     
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        self.moves = 0
         self.towers[0] = np.ones(self.n_disks)
         self.towers[1] = np.zeros(self.n_disks)
         self.towers[2] = np.zeros(self.n_disks)
@@ -71,6 +78,12 @@ class HanoiEnv(gym.Env):
         a = self.action_to_src_des[action]
         src = a[0]
         des = a[1]
+        
+        reward = 0
+        # if no disk on source, invalid move, penalize
+        if(np.sum(self.towers[src]) == 0):
+            reward -= 10
+
         for disk in range(self.n_disks):
             # find smallest disk on source
             if self.towers[src][disk] == 0:
@@ -86,12 +99,18 @@ class HanoiEnv(gym.Env):
             if not invalid:
                 self.towers[src][disk] = 0
                 self.towers[des][disk] = 1
+                self.moves += 1
+            #penalise invalid moves
+            else:
+                reward -= 10
             break
         obs = self._get_obs()
         info = self._get_info()
         truncated = False
-        terminated = np.sum(self.towers[2]) == self.n_disks
-        reward = -1  # -1 for every time step
+        terminated = bool(np.sum(self.towers[2]) == self.n_disks)
+        if(terminated):
+            reward += 150
+        reward -= 0.1  # -1 for every time step
         
         if self.render_mode == "human":
             self.render()
@@ -189,7 +208,7 @@ class HanoiEnv(gym.Env):
         
         # Draw move counter
         info = self._get_info()
-        moves_text = font.render(f"Remaining: {info['remaining']}", True, (0, 0, 0))
+        moves_text = font.render(f"Remaining: {info['remaining']}\t moves: {info['moves']}", True, (0, 0, 0))
         self.window.blit(moves_text, (10, 10))
         
         pygame.event.pump()
